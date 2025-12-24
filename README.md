@@ -17,3 +17,7 @@ After purchasing a signal, buyers can rate sellers to help others make better de
 5. Learn more in "about$"
 
 That's it. Simple and straightforward.
+
+https://insider-buy-signals.vercel.app/
+
+discord: m1serybus1ness

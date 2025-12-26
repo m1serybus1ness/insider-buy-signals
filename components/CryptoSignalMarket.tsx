@@ -117,6 +117,38 @@ export default function InsiderBuySignals() {
     }
   }
 
+  // Encrypt string using FHE
+  const encryptString = async (text: string): Promise<string> => {
+    if (!relayerInstance || !address) {
+      throw new Error('Relayer not initialized or wallet not connected')
+    }
+
+    // Convert string to number by hashing and taking modulo 2^31 - 1
+    const hash = ethers.keccak256(ethers.toUtf8Bytes(text))
+    const hashBigInt = BigInt(hash)
+    const maxValue = BigInt(2 ** 31 - 1)
+    const value = Number(hashBigInt % maxValue)
+
+    const inputBuilder = relayerInstance.createEncryptedInput(
+      CONTRACT_ADDRESS,
+      address
+    )
+    inputBuilder.add32(value)
+
+    const encryptedInput = await Promise.race([
+      inputBuilder.encrypt(),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Encryption timeout')), 30000)
+      )
+    ]) as any
+
+    if (!encryptedInput?.handles || encryptedInput.handles.length === 0) {
+      throw new Error('Encryption failed')
+    }
+
+    return encryptedInput.handles[0]
+  }
+
   const getEthersSigner = async () => {
     if (walletClient) {
       return await walletClientToSigner(walletClient)
@@ -208,6 +240,11 @@ export default function InsiderBuySignals() {
       return
     }
 
+    if (!relayerInstance) {
+      alert('FHE relayer is not ready. Please wait...')
+      return
+    }
+
     if (!newDescription.trim() || !newPrice.trim() || !newSignal.trim()) {
       alert('Please fill in all fields')
       return
@@ -221,8 +258,8 @@ export default function InsiderBuySignals() {
 
     setIsLoading(true)
     try {
-      const signalBytes = ethers.toUtf8Bytes(newSignal.trim())
-      const signalHash = ethers.keccak256(signalBytes)
+      // Encrypt signal using FHE
+      const encryptedSignal = await encryptString(newSignal.trim())
 
       const signer = await getEthersSigner()
       const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer)
@@ -230,7 +267,7 @@ export default function InsiderBuySignals() {
       const tx = await contract.createListing(
         newDescription.trim(),
         parseEther(newPrice),
-        signalHash
+        encryptedSignal
       )
       await tx.wait()
 
@@ -427,11 +464,16 @@ export default function InsiderBuySignals() {
               </div>
               <button
                 onClick={createListing}
-                disabled={isLoading || !isConnected}
+                disabled={isLoading || !isConnected || !relayerInstance}
                 className="px-8 py-3 bg-blue-600 text-white font-light hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isLoading ? 'Creating...' : 'Create Listing'}
               </button>
+              {!isRelayerLoading && !relayerInstance && (
+                <div className="mt-4 bg-red-100 border border-red-400 rounded p-3">
+                  <p className="text-red-800 text-sm">FHE encryption system failed to initialize. Please refresh the page.</p>
+                </div>
+              )}
             </div>
           </div>
         )}

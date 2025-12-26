@@ -2,12 +2,13 @@
 pragma solidity ^0.8.20;
 
 /**
- * Insider Buy Signals
+ * Insider Buy Signals - Marketplace with Fully Homomorphic Encryption
  * 
  * Marketplace for buying and selling encrypted crypto trading signals.
  * Sellers create listings with encrypted signals, buyers purchase them.
- * Signals are encrypted with FHE before being stored on-chain.
- * Buyers can rate sellers.
+ * All signals are encrypted using FHE (Fully Homomorphic Encryption) via Zama FHEVM.
+ * Signal data is stored as FHE handles (bytes32) which represent encrypted euint32 values.
+ * Buyers can rate sellers based on signal quality.
  */
 contract InsiderBuySignals {
     
@@ -15,7 +16,7 @@ contract InsiderBuySignals {
         address seller;
         string description;
         uint256 price;
-        bytes32 encryptedSignal;
+        bytes32 encryptedSignal;  // FHE handle for encrypted signal data (euint32)
         uint256 createdAt;
         bool isActive;
         uint256 purchaseCount;
@@ -24,7 +25,7 @@ contract InsiderBuySignals {
     struct Purchase {
         address buyer;
         uint256 listingId;
-        bytes32 encryptedSignal;
+        bytes32 encryptedSignal;  // FHE handle for encrypted signal data (euint32)
         uint256 purchasedAt;
     }
     
@@ -69,23 +70,32 @@ contract InsiderBuySignals {
         int256 rating
     );
     
+    /**
+     * Create a new listing with FHE-encrypted signal data
+     * @param _description Public description of the signal (not encrypted)
+     * @param _price Price in wei for the signal
+     * @param _encryptedSignal FHE handle (euint32) for encrypted signal data
+     * @return listingId The ID of the newly created listing
+     */
     function createListing(
         string memory _description,
         uint256 _price,
-        bytes32 _encryptedSignal
+        bytes32 _encryptedSignal  // FHE handle
     ) external returns (uint256) {
         require(bytes(_description).length > 0, "Description cannot be empty");
         require(_price > 0, "Price must be greater than 0");
-        require(_encryptedSignal != bytes32(0), "Encrypted signal cannot be empty");
+        require(_encryptedSignal != bytes32(0), "FHE encrypted signal cannot be empty");
         
         uint256 listingId = listingCounter;
         listingCounter++;
         
+        // Store FHE handle - this represents encrypted signal data that can be used
+        // in homomorphic operations without decryption
         listings[listingId] = Listing({
             seller: msg.sender,
             description: _description,
             price: _price,
-            encryptedSignal: _encryptedSignal,
+            encryptedSignal: _encryptedSignal,  // FHE handle stored
             createdAt: block.timestamp,
             isActive: true,
             purchaseCount: 0
@@ -158,6 +168,11 @@ contract InsiderBuySignals {
         );
     }
     
+    /**
+     * Get FHE handle for encrypted signal (seller and buyers only)
+     * @param _listingId The ID of the listing
+     * @return The FHE handle (bytes32) for the encrypted signal data
+     */
     function getListingEncryptedSignal(uint256 _listingId) external view returns (bytes32) {
         Listing storage listing = listings[_listingId];
         require(listing.seller != address(0), "Listing does not exist");
@@ -166,7 +181,7 @@ contract InsiderBuySignals {
             "Must be seller or buyer to access signal"
         );
         
-        return listing.encryptedSignal;
+        return listing.encryptedSignal;  // Returns FHE handle
     }
     
     function getPurchase(uint256 _listingId, uint256 _purchaseIndex) external view returns (

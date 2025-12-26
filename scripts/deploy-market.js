@@ -4,7 +4,7 @@ const path = require('path')
 require('dotenv').config({ path: '.env.local' })
 
 const PRIVATE_KEY = process.env.PRIVATE_KEY
-const RPC_URL = process.env.SEPOLIA_RPC_URL || 'https://ethereum-sepolia-rpc.publicnode.com'
+const RPC_URL = process.env.SEPOLIA_RPC_URL || 'https://0xrpc.io/sep'
 
 if (!PRIVATE_KEY) {
   throw new Error('PRIVATE_KEY not found in .env.local')

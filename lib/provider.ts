@@ -27,7 +27,7 @@ export async function getSigner(): Promise<ethers.JsonRpcSigner> {
 }
 
 export function getReadOnlyProvider(): ethers.JsonRpcProvider {
-  const rpcUrl = process.env.NEXT_PUBLIC_SEPOLIA_RPC_URL || 'https://ethereum-sepolia-rpc.publicnode.com'
+  const rpcUrl = process.env.NEXT_PUBLIC_SEPOLIA_RPC_URL || 'https://0xrpc.io/sep'
   return new ethers.JsonRpcProvider(rpcUrl)
 }
 

@@ -1,22 +1,20 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.24;
+
+import {FHE, euint32, externalEuint32} from "@fhevm/solidity/lib/FHE.sol";
+import {ZamaEthereumConfig} from "@fhevm/solidity/config/ZamaConfig.sol";
 
 /**
- * Insider Buy Signals - Marketplace with Fully Homomorphic Encryption
- * 
- * Marketplace for buying and selling encrypted crypto trading signals.
- * Sellers create listings with encrypted signals, buyers purchase them.
- * All signals are encrypted using FHE (Fully Homomorphic Encryption) via Zama FHEVM.
- * Signal data is stored as FHE handles (bytes32) which represent encrypted euint32 values.
- * Buyers can rate sellers based on signal quality.
+ * Insider Buy Signals - Marketplace with FHE encryption
+ * Marketplace for buying and selling encrypted crypto trading signals
  */
-contract InsiderBuySignals {
+contract InsiderBuySignals is ZamaEthereumConfig {
     
     struct Listing {
         address seller;
         string description;
         uint256 price;
-        bytes32 encryptedSignal;  // FHE handle for encrypted signal data (euint32)
+        euint32 encryptedSignal;
         uint256 createdAt;
         bool isActive;
         uint256 purchaseCount;
@@ -25,7 +23,7 @@ contract InsiderBuySignals {
     struct Purchase {
         address buyer;
         uint256 listingId;
-        bytes32 encryptedSignal;  // FHE handle for encrypted signal data (euint32)
+        euint32 encryptedSignal;
         uint256 purchasedAt;
     }
     
@@ -70,32 +68,27 @@ contract InsiderBuySignals {
         int256 rating
     );
     
-    /**
-     * Create a new listing with FHE-encrypted signal data
-     * @param _description Public description of the signal (not encrypted)
-     * @param _price Price in wei for the signal
-     * @param _encryptedSignal FHE handle (euint32) for encrypted signal data
-     * @return listingId The ID of the newly created listing
-     */
+    // Create a new listing with encrypted signal
     function createListing(
         string memory _description,
         uint256 _price,
-        bytes32 _encryptedSignal  // FHE handle
+        externalEuint32 encryptedSignal,
+        bytes calldata inputProof
     ) external returns (uint256) {
         require(bytes(_description).length > 0, "Description cannot be empty");
         require(_price > 0, "Price must be greater than 0");
-        require(_encryptedSignal != bytes32(0), "FHE encrypted signal cannot be empty");
         
         uint256 listingId = listingCounter;
         listingCounter++;
         
-        // Store FHE handle - this represents encrypted signal data that can be used
-        // in homomorphic operations without decryption
+        euint32 signal = FHE.fromExternal(encryptedSignal, inputProof);
+        FHE.allow(signal, msg.sender);
+        
         listings[listingId] = Listing({
             seller: msg.sender,
             description: _description,
             price: _price,
-            encryptedSignal: _encryptedSignal,  // FHE handle stored
+            encryptedSignal: signal,
             createdAt: block.timestamp,
             isActive: true,
             purchaseCount: 0
@@ -115,6 +108,9 @@ contract InsiderBuySignals {
         require(msg.sender != listing.seller, "Cannot purchase own listing");
         
         bool alreadyPurchased = hasPurchased[_listingId][msg.sender];
+        
+        // Allow buyer to decrypt the signal
+        FHE.allow(listing.encryptedSignal, msg.sender);
         
         listingPurchases[_listingId].push(Purchase({
             buyer: msg.sender,
@@ -168,12 +164,8 @@ contract InsiderBuySignals {
         );
     }
     
-    /**
-     * Get FHE handle for encrypted signal (seller and buyers only)
-     * @param _listingId The ID of the listing
-     * @return The FHE handle (bytes32) for the encrypted signal data
-     */
-    function getListingEncryptedSignal(uint256 _listingId) external view returns (bytes32) {
+    // Get encrypted signal (seller and buyers only)
+    function getListingEncryptedSignal(uint256 _listingId) external view returns (euint32) {
         Listing storage listing = listings[_listingId];
         require(listing.seller != address(0), "Listing does not exist");
         require(
@@ -181,12 +173,12 @@ contract InsiderBuySignals {
             "Must be seller or buyer to access signal"
         );
         
-        return listing.encryptedSignal;  // Returns FHE handle
+        return listing.encryptedSignal;
     }
     
     function getPurchase(uint256 _listingId, uint256 _purchaseIndex) external view returns (
         address buyer,
-        bytes32 encryptedSignal,
+        euint32 encryptedSignal,
         uint256 purchasedAt
     ) {
         require(_purchaseIndex < listingPurchases[_listingId].length, "Purchase does not exist");
